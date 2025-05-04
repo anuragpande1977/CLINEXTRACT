@@ -1,71 +1,66 @@
 import streamlit as st
 import re
-import textwrap
+import pandas as pd
+from io import StringIO
 
 st.set_page_config(page_title="Clinical Study Extractor", layout="wide")
 st.title("📋 Clinical Study Summary Extractor")
 
-st.markdown("Paste a study summary below. The app will extract fields and give you a tab-separated row you can copy-paste into Excel.")
+st.markdown("""
+Paste one clinical study summary at a time below. The app will extract the following fields:
+- **Name of Article**
+- **Author Name**
+- **Year**
+- **Result** (Positive/Negative)
+- **Protocol** (e.g. randomized, double-blind)
+- **Results Summary**
+- **Dosage**
+
+It will output a **tab-separated row** you can **copy and paste directly into Excel**.
+""")
 
 input_text = st.text_area("📄 Paste Study Summary Here:", height=400)
 
-def extract_study_fields(text):
-    # Initialize default values
-    name = ""
-    author = ""
-    year_match = re.search(r'\b(19|20)\d{2}\b', text)
+def extract_study_data(text):
+    # Extract author (first capitalized name followed by et al or year pattern)
+    author_match = re.search(r"([A-Z][a-z]+ et al\.|[A-Z][a-z]+,? \d{4})", text)
+    author = author_match.group(1).replace(",", "") if author_match else ""
+
+    # Extract year
+    year_match = re.search(r"\b(19|20)\d{2}\b", text)
     year = year_match.group(0) if year_match else ""
 
-    # Determine result
-    if "no significant" in text.lower() or "did not improve" in text.lower():
-        result = "Negative"
-    elif "significant improvement" in text.lower() or "was effective" in text.lower() or "positive outcome" in text.lower():
-        result = "Positive"
-    else:
-        result = ""
+    # Result
+    result = "Positive" if re.search(r"significant improvement|effective|statistically significant", text, re.IGNORECASE) else "Negative" if re.search(r"no significant|did not improve|no improvement", text, re.IGNORECASE) else ""
 
-    # Determine protocol
-    if "double-blind" in text.lower() and "placebo" in text.lower():
-        protocol = "Randomized, double-blind, placebo-controlled"
-    elif "randomized" in text.lower():
-        protocol = "Randomized"
-    elif "open-label" in text.lower():
-        protocol = "Open-label"
-    else:
-        protocol = ""
-
-    # Product guess
-    if "permixon" in text.lower():
-        product = "Permixon"
-    elif "hesr" in text.lower():
-        product = "HESr"
-    elif "saw palmetto" in text.lower():
-        product = "Saw Palmetto"
-    elif "serenoa repens" in text.lower():
-        product = "Serenoa repens"
-    else:
-        product = ""
+    # Protocol
+    protocol = ""
+    if "double-blind" in text.lower(): protocol += "Double-blind, "
+    if "placebo" in text.lower(): protocol += "Placebo-controlled, "
+    if "randomized" in text.lower(): protocol += "Randomized, "
+    if "open-label" in text.lower(): protocol += "Open-label, "
+    protocol = protocol.strip(', ')
 
     # Dosage
-    dosage_match = re.search(r'(\d{2,4}\s?mg(?:/day)?(?:\s?(twice|once)?\s?(daily)?)?)', text.lower())
+    dosage_match = re.search(r"(\d{2,4}\s?mg(?:/[a-z]+)?(?:\s?(once|twice)? daily)?)", text, re.IGNORECASE)
     dosage = dosage_match.group(1) if dosage_match else ""
 
-    # Summary (shortened version)
-    summary = textwrap.shorten(text.replace("\n", " "), width=280, placeholder="...")
+    # Short summary
+    result_summary = re.sub(r"\n+", " ", text)
+    result_summary = result_summary.strip()
+    result_summary = result_summary[:300] + "..." if len(result_summary) > 300 else result_summary
 
-    # Notes
-    notes = ""
-
-    return [name, author, year, result, protocol, product, summary, dosage, notes]
+    return ["", author, year, result, protocol, result_summary, dosage]
 
 if input_text:
-    extracted = extract_study_fields(input_text)
-    tsv_line = "\t".join(extracted)
-    
-    st.markdown("### ✅ Tab-Separated Row (Copy This to Excel):")
+    output = extract_study_data(input_text)
+    labels = ["Name of Article", "Author Name", "Year", "Result", "Protocol", "Results Summary", "Dosage"]
+    tsv_line = "\t".join(output)
+
+    st.markdown("### ✅ Copy-Paste This Row into Excel:")
     st.code(tsv_line, language='tsv')
-    
+
     with st.expander("📋 Field Breakdown"):
-        labels = ["NAME OF STUDY", "AUTHOR", "YEAR", "RESULT", "PROTOCOL", "PRODUCT", "SUMMARY", "DOSAGE", "NOTES"]
-        for label, value in zip(labels, extracted):
-            st.write(f"**{label}:** {value if value else '*blank*'}")
+        for label, val in zip(labels, output):
+            st.write(f"**{label}:** {val if val else '*blank*'}")
+
