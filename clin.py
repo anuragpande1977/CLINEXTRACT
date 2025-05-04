@@ -1,50 +1,38 @@
 import streamlit as st
 import pandas as pd
-import re
-from io import BytesIO
+import io
 
-st.set_page_config(page_title="Clinical Study Extractor", layout="wide")
-st.title("Clinical Study Extractor")
-
-# Template columns
+# Define the column structure
 columns = ["NAME OF STUDY", "AUTHOR", "YEAR", "RESULT", "PROTOCOL", "PRODUCT", "SUMMARY", "DOSAGE", "NOTES"]
 
-def extract_fields_from_text(text):
-    # Initialize blank row
-    row = {col: "" for col in columns}
+# Streamlit app title
+st.title("Clinical Study Summary Extractor")
 
-    # Simple logic to extract common fields if patterns are matched
-    if "randomized" in text.lower():
-        row["PROTOCOL"] = "Randomized, double-blind, placebo-controlled trial"
-    if "serenoa repens" in text.lower():
-        row["PRODUCT"] = "Serenoa repens extract"
-    if "saw palmetto" in text.lower():
-        row["PRODUCT"] = "Saw palmetto extract"
-    if "AUASI" in text or "IPSS" in text:
-        row["SUMMARY"] = "Study measured changes in AUASI/IPSS scores and urinary outcomes."
-    if "psa" in text.lower():
-        row["NOTES"] = "PSA level evaluation included"
-    if match := re.search(r'(\d{3,4})\s*mg', text):
-        row["DOSAGE"] = match.group(0)
-    if "placebo" in text.lower():
-        row["RESULT"] = "No significant difference vs. placebo"
+# Input box for pasting the study summary
+text_input = st.text_area("Paste the Clinical Study Summary Text Here:", height=400)
+
+if st.button("Extract and Download Excel"):
+    if text_input.strip():
+        # Dummy placeholder logic - you can replace this with actual NLP extraction rules
+        # For now it populates only SUMMARY and leaves others blank for manual entry
+        row = ["" for _ in columns]
+        row[6] = text_input.strip()  # Put entire pasted text into SUMMARY column
+
+        df = pd.DataFrame([row], columns=columns)
+
+        # Create Excel in memory
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+        buffer.seek(0)
+
+        st.download_button(
+            label="Download Extracted Excel File",
+            data=buffer,
+            file_name="clinical_study_extracted.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     else:
-        row["RESULT"] = "Positive outcome"
+        st.error("Please paste the clinical study summary text before extracting.")
 
-    row["SUMMARY"] = text.strip().replace("\n", " ")[:400]  # Condensed summary
-    row["NAME OF STUDY"] = "Extracted Study"
-
-    return row
-
-uploaded_file = st.file_uploader("Upload your study summary text file (.txt)", type=["txt"])
-
-if uploaded_file is not None:
-    text = uploaded_file.read().decode("utf-8")
-    row_data = extract_fields_from_text(text)
-    df = pd.DataFrame([row_data], columns=columns)
-    st.dataframe(df)
-
-    buffer = BytesIO()
-    df.to_excel(buffer, index=False)
-    st.download_button("Download as Excel", data=buffer.getvalue(), file_name="study_extracted.xlsx")
 
