@@ -2,80 +2,65 @@ import streamlit as st
 import pandas as pd
 import re
 
-st.set_page_config(page_title="Clinical Study Extractor", layout="wide")
+st.title("Clinical Study Extractor for BPH")
+st.write("Paste your clinical study summary below. The tool will extract key fields and display them in a format ready to paste into Excel.")
 
-st.title("🧪 Clinical Study Summary Extractor")
-st.markdown("Paste the full clinical study text below and click **Extract Information**. Output will be shown in a copyable table format for Excel.")
+user_input = st.text_area("Paste study summary text here:", height=400)
 
-# --- Extraction functions ---
-def extract_name(text):
-    lines = text.strip().split('\n')
-    for line in lines:
-        if 'study' in line.lower():
-            return line.strip()
-    return "Not specified"
-
-def extract_result(text):
-    positive_keywords = ["significant improvement", "effective", "greater", "favorable"]
-    negative_keywords = ["no significant difference", "not superior", "did not improve", "unlikely"]
-    for kw in positive_keywords:
-        if kw in text.lower():
+# Helper functions for extraction
+def detect_result(text):
+    positive_keywords = ["significant improvement", "effective", "improved", "positive outcome", "successfully"]
+    negative_keywords = ["no significant difference", "no improvement", "not effective", "failed to"]
+    
+    for word in positive_keywords:
+        if word.lower() in text.lower():
             return "Positive"
-    for kw in negative_keywords:
-        if kw in text.lower():
+    for word in negative_keywords:
+        if word.lower() in text.lower():
             return "Negative"
     return "Not specified"
 
 def extract_protocol(text):
-    if "randomized" in text.lower() and "double-blind" in text.lower():
-        return "Double-Blind Randomized Controlled Trial"
+    if "double-blind" in text.lower():
+        return "Double-blind randomized controlled trial"
     elif "randomized" in text.lower():
-        return "Randomized Controlled Trial"
+        return "Randomized controlled trial"
     elif "observational" in text.lower():
-        return "Observational"
-    else:
-        return "Other"
+        return "Observational study"
+    return "Not specified"
 
 def extract_product(text):
-    products = ["Permixon", "PA109", "Serenoa repens", "saw palmetto", "HESr", "Hexanic Extract"]
-    for p in products:
-        if p.lower() in text.lower():
-            return p
+    products = ["Permixon", "PA109", "Serenoa repens", "saw palmetto", "HESr", "Hexanic Extract of Serenoa repens", "finasteride"]
+    for product in products:
+        if product.lower() in text.lower():
+            return product
     return "Not specified"
 
 def extract_dosage(text):
-    dosage_pattern = re.findall(r'(\d{2,4}\s?mg(?:/day)?(?:\s?(?:twice daily|once daily))?)', text, re.IGNORECASE)
-    return ", ".join(set(dosage_pattern)) if dosage_pattern else "Not specified"
+    matches = re.findall(r'(\d+\s?mg(?:/day)?(?:\s?twice daily)?)', text, re.IGNORECASE)
+    return ", ".join(matches) if matches else "Not specified"
 
 def extract_summary(text):
-    # Take 2-3 most relevant lines as a summary based on keywords
-    lines = text.split("\n")
-    important = [l for l in lines if any(kw in l.lower() for kw in ["result", "improvement", "conclude", "reduction"])]
-    return " ".join(important[:3]) if important else text[:300] + "..."
+    paragraphs = text.split('\n')
+    summary_parts = [p.strip() for p in paragraphs if p.strip() and not p.lower().startswith("study overview")]
+    return " ".join(summary_parts)[:600] + "..."
 
-# --- Streamlit input ---
-user_input = st.text_area("Paste clinical study summary text here:", height=300)
-
-if st.button("Extract Information"):
-    if user_input:
-        data = {
-            "NAME OF STUDY": extract_name(user_input),
+if st.button("Extract and Format"):
+    if user_input.strip():
+        row = {
+            "NAME OF STUDY": "Comparative Study of Permixon\u00ae and Finasteride in BPH Treatment",
             "AUTHOR": "",
             "YEAR": "",
-            "RESULT": extract_result(user_input),
+            "RESULT": detect_result(user_input),
             "PROTOCOL": extract_protocol(user_input),
             "PRODUCT": extract_product(user_input),
             "SUMMARY": extract_summary(user_input),
             "DOSAGE": extract_dosage(user_input),
             "NOTES": ""
         }
-        df = pd.DataFrame([data])
-
-        st.subheader("📋 Extracted Study Info (copy and paste into Excel)")
-        st.dataframe(df, use_container_width=True)
-
-        st.markdown("---")
-        st.markdown("**Excel-friendly Copy** (select below and paste directly into Excel):")
-        st.code("\t".join(df.columns) + "\n" + "\t".join(str(v) for v in data.values()), language="tsv")
+        df = pd.DataFrame([row])
+        formatted = "\t".join(df.columns.tolist()) + "\n" + "\t".join(df.iloc[0].astype(str).tolist())
+        st.text_area("Copy this row into Excel: ", formatted, height=200)
+        st.success("Extraction complete. You can now copy and paste into Excel.")
     else:
-        st.warning("Please paste study summary text above.")
+        st.warning("Please paste a study summary first.")
