@@ -1,61 +1,71 @@
 import streamlit as st
-import pandas as pd
 import re
+import textwrap
 
-# Function to extract information from pasted study text
-def extract_study_info(text):
-    result_keywords = {
-        "positive": ["significant improvement", "effectively", "better", "improvement", "favorable", "efficacy"],
-        "negative": ["no significant difference", "no improvement", "did not", "failed to", "unlikely to", "not superior"]
-    }
+st.set_page_config(page_title="Clinical Study Extractor", layout="wide")
+st.title("📋 Clinical Study Summary Extractor")
 
-    def detect_result(text):
-        for pos_word in result_keywords["positive"]:
-            if pos_word.lower() in text.lower():
-                return "Positive"
-        for neg_word in result_keywords["negative"]:
-            if neg_word.lower() in text.lower():
-                return "Negative"
-        return "Not specified"
+st.markdown("Paste a study summary below. The app will extract fields and give you a tab-separated row you can copy-paste into Excel.")
 
-    def extract_dosage(text):
-        match = re.search(r'(\d+\s?mg(?:/day)?(?:\s?twice daily)?)', text, re.IGNORECASE)
-        return match.group(1) if match else "Not specified"
+input_text = st.text_area("📄 Paste Study Summary Here:", height=400)
 
-    def extract_product(text):
-        match = re.search(r'(Permixon|PA109|Serenoa repens|saw palmetto|HESr|Hexanic Extract of Serenoa repens)', text, re.IGNORECASE)
-        return match.group(1) if match else "Not specified"
+def extract_study_fields(text):
+    # Initialize default values
+    name = ""
+    author = ""
+    year_match = re.search(r'\b(19|20)\d{2}\b', text)
+    year = year_match.group(0) if year_match else ""
 
-    def extract_name_of_study(text):
-        lines = text.strip().split('\n')
-        for line in lines:
-            if "study" in line.lower():
-                return line.strip()
-        return "Not specified"
-
-    info = {
-        "NAME OF STUDY": extract_name_of_study(text),
-        "AUTHOR": "",
-        "YEAR": "",
-        "RESULT": detect_result(text),
-        "PROTOCOL": "Randomized Controlled Trial" if "randomized" in text.lower() else "Observational or Other",
-        "PRODUCT": extract_product(text),
-        "SUMMARY": text.replace('\n', ' '),
-        "DOSAGE": extract_dosage(text),
-        "NOTES": ""
-    }
-    return info
-
-st.title("Clinical Study Summary Extractor")
-
-user_input = st.text_area("Paste the study summary text here:")
-
-if st.button("Extract Information"):
-    if user_input:
-        info = extract_study_info(user_input)
-        df = pd.DataFrame([info])
-        st.dataframe(df)
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button("Download as CSV", csv, "study_info.csv", "text/csv")
+    # Determine result
+    if "no significant" in text.lower() or "did not improve" in text.lower():
+        result = "Negative"
+    elif "significant improvement" in text.lower() or "was effective" in text.lower() or "positive outcome" in text.lower():
+        result = "Positive"
     else:
-        st.warning("Please paste the study summary text before clicking extract.")
+        result = ""
+
+    # Determine protocol
+    if "double-blind" in text.lower() and "placebo" in text.lower():
+        protocol = "Randomized, double-blind, placebo-controlled"
+    elif "randomized" in text.lower():
+        protocol = "Randomized"
+    elif "open-label" in text.lower():
+        protocol = "Open-label"
+    else:
+        protocol = ""
+
+    # Product guess
+    if "permixon" in text.lower():
+        product = "Permixon"
+    elif "hesr" in text.lower():
+        product = "HESr"
+    elif "saw palmetto" in text.lower():
+        product = "Saw Palmetto"
+    elif "serenoa repens" in text.lower():
+        product = "Serenoa repens"
+    else:
+        product = ""
+
+    # Dosage
+    dosage_match = re.search(r'(\d{2,4}\s?mg(?:/day)?(?:\s?(twice|once)?\s?(daily)?)?)', text.lower())
+    dosage = dosage_match.group(1) if dosage_match else ""
+
+    # Summary (shortened version)
+    summary = textwrap.shorten(text.replace("\n", " "), width=280, placeholder="...")
+
+    # Notes
+    notes = ""
+
+    return [name, author, year, result, protocol, product, summary, dosage, notes]
+
+if input_text:
+    extracted = extract_study_fields(input_text)
+    tsv_line = "\t".join(extracted)
+    
+    st.markdown("### ✅ Tab-Separated Row (Copy This to Excel):")
+    st.code(tsv_line, language='tsv')
+    
+    with st.expander("📋 Field Breakdown"):
+        labels = ["NAME OF STUDY", "AUTHOR", "YEAR", "RESULT", "PROTOCOL", "PRODUCT", "SUMMARY", "DOSAGE", "NOTES"]
+        for label, value in zip(labels, extracted):
+            st.write(f"**{label}:** {value if value else '*blank*'}")
