@@ -1,4 +1,3 @@
-
 def generate_study_title(summary):
     s = summary.lower()
     if "real-world" in s and "luts" in s and "bph" in s:
@@ -22,24 +21,21 @@ def extract_product(summary):
 def generate_result(summary):
     return "Positive" if "improvement" in summary.lower() or "effective" in summary.lower() else "Neutral or unclear"
 
-def format_summary_for_excel(summary_text):
+def parse_summary(summary_text):
     name = generate_study_title(summary_text)
-    author = ""
-    year = ""
     result = generate_result(summary_text)
     protocol = "Double-Blind RCT" if "double-blind" in summary_text.lower() else "Observational" if "real-life" in summary_text.lower() else "Unspecified"
     product = extract_product(summary_text)
-    summary = summary_text.strip().replace("\n", " ")
     dosage = "320 mg" if "320 mg" in summary_text else "Not specified"
+    summary = summary_text.strip().replace("\n", " ")
     notes = ""
 
-    return f"{name}\t{author}\t{year}\t{result}\t{protocol}\t{product}\t{summary}\t{dosage}\t{notes}"
+    return f"{name}\t\t\t{result}\t{protocol}\t{product}\t{summary}\t{dosage}\t{notes}"
 
-# === Example ===
+# === Example usage ===
 if __name__ == "__main__":
-    print("Paste your SciSummary text (end with ENTER + CTRL+D on Mac/Linux or ENTER + CTRL+Z on Windows):\n")
-    import sys
-    summary_input = sys.stdin.read()
+    summary_input = """Paste your full SciSummary output here..."""
 
-    print("\n📋 Copy and paste this line into Excel:\n")
-    print(format_summary_for_excel(summary_input))
+    print("\n📋 Tab-separated Excel row:\n")
+    print(parse_summary(summary_input))
+
