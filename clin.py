@@ -2,53 +2,68 @@ import streamlit as st
 import pandas as pd
 import re
 
-st.title("Clinical Study Extractor for BPH")
-st.write("Paste your clinical study summary below. The tool will extract key fields and display them in a format ready to paste into Excel.")
-
-user_input = st.text_area("Paste study summary text here:", height=400)
-
-# Helper functions for extraction
+# Updated extraction functions
 def detect_result(text):
-    positive_keywords = ["significant improvement", "effective", "improved", "positive outcome", "successfully"]
-    negative_keywords = ["no significant difference", "no improvement", "not effective", "failed to"]
-    
+    positive_keywords = ["significant improvement", "effective", "improved", "benefit", "favorable", "comparable"]
+    negative_keywords = ["no improvement", "no significant difference", "not effective", "failed", "unlikely"]
     for word in positive_keywords:
-        if word.lower() in text.lower():
+        if word in text.lower():
             return "Positive"
     for word in negative_keywords:
-        if word.lower() in text.lower():
+        if word in text.lower():
             return "Negative"
+    return "Not specified"
+
+def extract_dosage(text):
+    patterns = [
+        r'\d+\s?mg(?:\s?/\s?day)?(?:\s?(?:once|twice|three times) daily)?',
+        r'\d+\s?mg\s?(?:daily|per day)',
+        r'\d+\s?mg(?:\s?x\s?\d+)?',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(0)
+    return "Not specified"
+
+def extract_product(text):
+    products = ["Permixon", "PA109", "Serenoa repens", "saw palmetto", "HESr", "Hexanic Extract of Serenoa repens"]
+    for prod in products:
+        if prod.lower() in text.lower():
+            return prod
     return "Not specified"
 
 def extract_protocol(text):
     if "double-blind" in text.lower():
-        return "Double-blind randomized controlled trial"
+        return "Double-Blind Randomized Controlled Trial"
     elif "randomized" in text.lower():
-        return "Randomized controlled trial"
+        return "Randomized Controlled Trial"
     elif "observational" in text.lower():
-        return "Observational study"
+        return "Observational Study"
     return "Not specified"
 
-def extract_product(text):
-    products = ["Permixon", "PA109", "Serenoa repens", "saw palmetto", "HESr", "Hexanic Extract of Serenoa repens", "finasteride"]
-    for product in products:
-        if product.lower() in text.lower():
-            return product
+def extract_name_of_study(text):
+    lines = text.strip().split('\n')
+    for line in lines:
+        if "study" in line.lower():
+            return line.strip()
     return "Not specified"
-
-def extract_dosage(text):
-    matches = re.findall(r'(\d+\s?mg(?:/day)?(?:\s?twice daily)?)', text, re.IGNORECASE)
-    return ", ".join(matches) if matches else "Not specified"
 
 def extract_summary(text):
-    paragraphs = text.split('\n')
-    summary_parts = [p.strip() for p in paragraphs if p.strip() and not p.lower().startswith("study overview")]
-    return " ".join(summary_parts)[:600] + "..."
+    paragraphs = text.split("\n\n")
+    summary = " ".join([p.strip() for p in paragraphs if len(p.strip()) > 50])
+    return summary[:1000]  # Trim to first 1000 chars if too long
 
-if st.button("Extract and Format"):
+# Streamlit UI
+st.title("Clinical Study Extractor")
+st.write("Paste a study summary below to extract key information.")
+
+user_input = st.text_area("Paste the study text here:", height=400)
+
+if st.button("Extract Study Info"):
     if user_input.strip():
-        row = {
-            "NAME OF STUDY": "Comparative Study of Permixon\u00ae and Finasteride in BPH Treatment",
+        data = {
+            "NAME OF STUDY": extract_name_of_study(user_input),
             "AUTHOR": "",
             "YEAR": "",
             "RESULT": detect_result(user_input),
@@ -58,9 +73,14 @@ if st.button("Extract and Format"):
             "DOSAGE": extract_dosage(user_input),
             "NOTES": ""
         }
-        df = pd.DataFrame([row])
-        formatted = "\t".join(df.columns.tolist()) + "\n" + "\t".join(df.iloc[0].astype(str).tolist())
-        st.text_area("Copy this row into Excel: ", formatted, height=200)
-        st.success("Extraction complete. You can now copy and paste into Excel.")
+
+        df = pd.DataFrame([data])
+        st.markdown("### Extracted Information")
+        st.dataframe(df)
+
+        st.markdown("### Copy & Paste Output for Excel")
+        row = f"{data['NAME OF STUDY']}\t{data['AUTHOR']}\t{data['YEAR']}\t{data['RESULT']}\t{data['PROTOCOL']}\t{data['PRODUCT']}\t{data['SUMMARY']}\t{data['DOSAGE']}\t{data['NOTES']}"
+        st.code(row, language='text')
     else:
-        st.warning("Please paste a study summary first.")
+        st.warning("Please enter study text to extract.")
+
