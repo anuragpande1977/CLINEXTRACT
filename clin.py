@@ -1,3 +1,4 @@
+import streamlit as st
 
 def generate_study_title(summary):
     s = summary.lower()
@@ -33,18 +34,30 @@ def create_excel_row(summary):
     dosage = "Not specified"
     notes = "Better safety profile and good adherence reported" if "safety" in summary.lower() and "adherence" in summary.lower() else ""
 
-    return f"{name}\t{author}\t{year}\t{result}\t{protocol}\t{product}\t{summary_text}\t{dosage}\t{notes}"
+    return {
+        "NAME OF STUDY": name,
+        "AUTHOR": author,
+        "YEAR": year,
+        "RESULT": result,
+        "PROTOCOL": protocol,
+        "PRODUCT": product,
+        "SUMMARY": summary_text,
+        "DOSAGE": dosage,
+        "NOTES": notes
+    }
 
-# === Usage ===
-if __name__ == "__main__":
-    print("📋 Paste your SciSummary text below. Press ENTER, then Ctrl+D (Mac/Linux) or Ctrl+Z + Enter (Windows):\n")
-    import sys
-    sci_summary = sys.stdin.read()
+# === Streamlit App ===
+st.title("🧪 Study Summary to Excel Row Converter")
 
-    row_output = create_excel_row(sci_summary)
-    print("\n✅ Copy and paste the following into Excel:\n")
-    print("=" * 80)
-    print(row_output)
-    print("=" * 80)
-    input("\n🔚 Press Enter to close after copying.")
+summary_input = st.text_area("Paste your scientific study summary here:", height=300)
 
+if st.button("Generate Excel Row"):
+    if summary_input.strip():
+        row_data = create_excel_row(summary_input)
+        st.success("✅ Generated Data:")
+        st.dataframe([row_data])
+        st.download_button("📥 Download as Excel", 
+                           pd.DataFrame([row_data]).to_excel(index=False, engine='openpyxl'),
+                           file_name="study_row.xlsx")
+    else:
+        st.warning("⚠️ Please paste a summary before clicking generate.")
