@@ -1,4 +1,8 @@
 import streamlit as st
+import pandas as pd
+from io import BytesIO
+
+# --- Helper Functions ---
 
 def generate_study_title(summary):
     s = summary.lower()
@@ -24,40 +28,45 @@ def generate_result(summary):
     return "Positive for saw palmetto extract" if "improvement" in summary.lower() or "effective" in summary.lower() else "Neutral or unclear result"
 
 def create_excel_row(summary):
-    name = generate_study_title(summary)
-    author = ""
-    year = ""
-    result = generate_result(summary)
-    protocol = "6-month observational study in real-life clinical settings" if "real-life" in summary.lower() else "Clinical protocol not specified"
-    product = extract_product(summary)
-    summary_text = summary.strip().replace("\n", " ")
-    dosage = "Not specified"
-    notes = "Better safety profile and good adherence reported" if "safety" in summary.lower() and "adherence" in summary.lower() else ""
-
     return {
-        "NAME OF STUDY": name,
-        "AUTHOR": author,
-        "YEAR": year,
-        "RESULT": result,
-        "PROTOCOL": protocol,
-        "PRODUCT": product,
-        "SUMMARY": summary_text,
-        "DOSAGE": dosage,
-        "NOTES": notes
+        "NAME OF STUDY": generate_study_title(summary),
+        "AUTHOR": "",
+        "YEAR": "",
+        "RESULT": generate_result(summary),
+        "PROTOCOL": "6-month observational study in real-life settings" if "real-life" in summary.lower() else "Clinical protocol not specified",
+        "PRODUCT": extract_product(summary),
+        "SUMMARY": summary.strip().replace("\n", " "),
+        "DOSAGE": "Not specified",
+        "NOTES": "Better safety profile and good adherence reported" if "safety" in summary.lower() and "adherence" in summary.lower() else ""
     }
 
-# === Streamlit App ===
-st.title("🧪 Study Summary to Excel Row Converter")
+# --- Streamlit App ---
 
-summary_input = st.text_area("Paste your scientific study summary here:", height=300)
+st.set_page_config(page_title="Study Summary to Excel", layout="centered")
+st.title("📋 Study Summary to Excel Row Converter")
+
+summary = st.text_area("Paste your scientific study summary below:", height=300)
 
 if st.button("Generate Excel Row"):
-    if summary_input.strip():
-        row_data = create_excel_row(summary_input)
-        st.success("✅ Generated Data:")
-        st.dataframe([row_data])
-        st.download_button("📥 Download as Excel", 
-                           pd.DataFrame([row_data]).to_excel(index=False, engine='openpyxl'),
-                           file_name="study_row.xlsx")
+    if summary.strip():
+        row_data = create_excel_row(summary)
+        df = pd.DataFrame([row_data])
+
+        st.subheader("✅ Generated Data")
+        st.dataframe(df)
+
+        # Save to in-memory Excel
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+        output.seek(0)
+
+        # Download button
+        st.download_button(
+            label="📥 Download Excel File",
+            data=output,
+            file_name="study_summary.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     else:
-        st.warning("⚠️ Please paste a summary before clicking generate.")
+        st.warning("⚠️ Please enter a summary before generating.")
